@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+const cors = require('cors');
 
 const app = express();
 expressWs(app);
@@ -13,6 +14,7 @@ let MongoClient = require('mongodb').MongoClient;
 const url = process.env.MONGODB_URI;
 
 app.use(bodyParser.json());
+app.use(cors());
 
 app.post("/sign-up", async (req, res) => {
     const name = req.body.name;
