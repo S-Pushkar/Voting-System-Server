@@ -5,6 +5,8 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const cors = require('cors');
+const events = require('events');
+const WebSocket = require('ws')
 
 const app = express();
 expressWs(app);
@@ -16,19 +18,56 @@ const url = process.env.MONGODB_URI;
 app.use(bodyParser.json());
 app.use(cors());
 
-app.ws("/ws", async (ws, req) => {
-    console.log('WebSocket connected');
+let em = new events.EventEmitter();
 
+let socketClients = [];
+
+
+app.ws("/ws", async (ws, req) => {
+    socketClients.push(ws);
+    console.log('WebSocket connected');
+    
     // Handle incoming messages from the client
     ws.on('message', (message) => {
         console.log('Received message from client:', message);
-
+        
     });
-
-    ws.send("Hello from socket");
-
+    
+    // ws.send("Hello from socket");
+    em.on("Updated", async () => {
+        let client = null;
+        let dbo = null;
+        let collection = null;
+        try {
+            client = await MongoClient.connect(url);
+            dbo = client.db("Voting-System");
+            collection = dbo.collection("Candidates");
+            let candidatesArr = await collection.find().toArray();
+            await client.close();
+            let candidates = [];
+            for (let i = 0; i < candidatesArr.length; i++) {
+                candidates.push({
+                    name: candidatesArr[i].name,
+                    email: candidatesArr[i].email,
+                    votes: candidatesArr[i].votes,
+                    voters: candidatesArr[i].voters,
+                });
+            }
+            console.log(candidates);
+            socketClients.forEach((cli) => {
+                if (cli.readyState == WebSocket.OPEN) {
+                    cli.send(JSON.stringify(candidates));
+                }
+            })
+        }
+        catch (err) {
+            console.error(err);
+        }
+    });
+    
     ws.on("close", () => {
         console.log("Connection closed");
+        socketClients.splice(socketClients.indexOf(ws), 1);
     });
 });
 
@@ -172,7 +211,7 @@ app.post("/vote", async (req, res) => {
         // let candidatesArr = await collection.find().toArray();
         await client.close();
         ////////////////////////////////////////////////////////////////////
-        app.emit("Updated");
+        em.emit("Updated");
         ////////////////////////////////////////////////////////////////////
         // let candidates = [];
         // for (let i = 0; i < candidatesArr.length; i++) {
@@ -229,7 +268,7 @@ app.post("/register", async (req, res) => {
         await collection.insertOne(candidateAcc);
         await client.close();
         ///////////////////////////////////////////////////////////////////
-        app.emit("Updated");
+        em.emit("Updated");
         //////////////////////////////////////////////////////////////////
         // let candidates = [];
         // for (let i = 0; i < candidatesArr.length; i++) {
@@ -279,7 +318,7 @@ app.post("/unregister", async (req, res) => {
         // let candidatesArr = await collection.find().toArray();
         await client.close();
         //////////////////////////////////////////////////////////////////
-        app.emit("Updated");
+        em.emit("Updated");
         /////////////////////////////////////////////////////////////////
         // let candidates = [];
         // for (let i = 0; i < candidatesArr.length; i++) {
@@ -310,9 +349,34 @@ app.post("/is-candidate", async (req, res) => {
     const token = req.body.token;
     const payload = jwt.verify(token, "secret");
     console.log("********************************Is a candidate:", payload.isCandidate);
-    res.json({
-        isCandidate: payload.isCandidate
-    });
+    
+    
+    let client = null;
+    let dbo = null;
+    let collection = null;
+    try {
+        client = await MongoClient.connect(url);
+        dbo = client.db("Voting-System");
+        collection = dbo.collection("Candidates");
+        let candidatesArr = await collection.find().toArray();
+        await client.close();
+        let candidates = [];
+        for (let i = 0; i < candidatesArr.length; i++) {
+            candidates.push({
+                name: candidatesArr[i].name,
+                email: candidatesArr[i].email,
+                votes: candidatesArr[i].votes,
+                voters: candidatesArr[i].voters,
+            });
+        }
+        res.json({
+            isCandidate: payload.isCandidate,
+            candidates: candidates
+        });
+    }
+    catch (err) {
+        console.error(err);
+    }
 });
 
 console.log("Server is listening on port 8080");
