@@ -175,6 +175,11 @@ app.post("/log-in", async (req, res) => {
 
 app.post("/vote", async (req, res) => {
     const token = req.body.token;
+    if (!token) {
+        return res.status(403).json({
+            message: "Not authorized"
+        });
+    }
     let payload = jwt.verify(token, "secret");
     const candidate = req.body.candidate;
     console.log("Trying to vote for:", candidate);
@@ -239,7 +244,11 @@ app.post("/vote", async (req, res) => {
 
 app.post("/register", async (req, res) => {
     const token = req.body.token;
-
+    if (!token) {
+        return res.status(403).json({
+            message: "Not authorized"
+        });
+    }
     const candidate = jwt.verify(token, "secret");
     let newPayload = candidate;
     newPayload.isCandidate = true;
@@ -297,7 +306,11 @@ app.post("/register", async (req, res) => {
 
 app.post("/unregister", async (req, res) => {
     const token = req.body.token;
-
+    if (!token) {
+        return res.status(403).json({
+            message: "Not authorized"
+        });
+    }
     const payload = jwt.verify(token, "secret");
     let newPayload = payload;
     newPayload.isCandidate = false;
@@ -347,6 +360,11 @@ app.post("/unregister", async (req, res) => {
 
 app.post("/is-candidate", async (req, res) => {
     const token = req.body.token;
+    if (!token) {
+        return res.status(403).json({
+            message: "Not authorized"
+        });
+    }
     const payload = jwt.verify(token, "secret");
     console.log("********************************Is a candidate:", payload.isCandidate);
     
