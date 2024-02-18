@@ -270,6 +270,12 @@ app.post("/unregister", async (req, res) => {
         dbo = client.db("Voting-System");
         collection = dbo.collection("Candidates");
         await collection.deleteOne({ email: payload.email });
+
+        collection = dbo.collection("Users");
+        let doc = await collection.findOne({ email: payload.email });
+        doc.isCandidate = false;
+        await collection.deleteOne({ email: payload.email });
+        await collection.insertOne(doc);
         // let candidatesArr = await collection.find().toArray();
         await client.close();
         //////////////////////////////////////////////////////////////////
