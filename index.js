@@ -16,6 +16,22 @@ const url = process.env.MONGODB_URI;
 app.use(bodyParser.json());
 app.use(cors());
 
+app.ws("/ws", async (ws, req) => {
+    console.log('WebSocket connected');
+
+    // Handle incoming messages from the client
+    ws.on('message', (message) => {
+        console.log('Received message from client:', message);
+
+    });
+
+    ws.send("Hello from socket");
+
+    ws.on("close", () => {
+        console.log("Connection closed");
+    });
+});
+
 app.post("/sign-up", async (req, res) => {
     const name = req.body.name;
     const email = req.body.email;
@@ -28,7 +44,7 @@ app.post("/sign-up", async (req, res) => {
         name: name,
         email: email,
         password: password,
-        candidatesVoted: []
+        isCandidate: false,
     };
     
     console.log("Signup request:", req.body);
@@ -75,8 +91,8 @@ app.post("/log-in", async (req, res) => {
 
     console.log("Login request:", req.body);
 
-    client = await MongoClient.connect(url);
     try {
+        client = await MongoClient.connect(url);
         dbo = client.db('Voting-System');
         collection = dbo.collection('Users');
         const user = await collection.findOne({
@@ -136,7 +152,7 @@ app.post("/vote", async (req, res) => {
         });
     }
 
-    payload.candidatesVoted.push(candidate);
+    // payload.candidatesVoted.push(candidate);
     const newToken = jwt.sign(payload, "secret");
 
     let client = null;
@@ -150,20 +166,27 @@ app.post("/vote", async (req, res) => {
         console.log(doc);
         doc.votes += 1;
         doc.voters.push(payload.email);
-        await collection.deleteOne(candidate);
+        // await collection.deleteOne(candidate);
+        await collection.deleteOne({ email: candidate.email });
         await collection.insertOne(doc);
-        let candidatesArr = await collection.find().toArray();
-
-        collection = dbo.collection("Users");
-        let doc1 = await collection.findOne({ email: payload.email });
-        doc1.candidatesVoted.push(candidate);
-        await collection.deleteOne({ email: payload.email });
-        await collection.insertOne(doc1);
+        // let candidatesArr = await collection.find().toArray();
         await client.close();
+        ////////////////////////////////////////////////////////////////////
+        app.emit("Updated");
+        ////////////////////////////////////////////////////////////////////
+        // let candidates = [];
+        // for (let i = 0; i < candidatesArr.length; i++) {
+        //     candidates.push({
+        //         name: candidatesArr[i].name,
+        //         email: candidatesArr[i].email,
+        //         votes: candidatesArr[i].votes,
+        //         voters: candidatesArr[i].voters,
+        //     });
+        // }
 
         res.json({
             token: newToken,
-            candidates: candidatesArr
+            // candidates: candidates
         });
     }
     catch (err) {
@@ -179,6 +202,8 @@ app.post("/register", async (req, res) => {
     const token = req.body.token;
 
     const candidate = jwt.verify(token, "secret");
+    let newPayload = candidate;
+    newPayload.isCandidate = true;
 
     let client = null;
     let dbo = null;
@@ -196,20 +221,30 @@ app.post("/register", async (req, res) => {
         let dup = await collection.findOne({ email: candidateData.email });
         if (!dup)
             await collection.insertOne(candidateData);
-        let candidatesArr = await collection.find().toArray();
+        // let candidatesArr = await collection.find().toArray();
+        collection = dbo.collection("Users");
+        let candidateAcc = await collection.findOne({ email: candidateData.email });
+        candidateAcc.isCandidate = true;
+        await collection.deleteOne({ email: candidateData.email });
+        await collection.insertOne(candidateAcc);
         await client.close();
-        let candidates = [];
-        for (let i = 0; i < candidatesArr.length; i++) {
-            candidates.push({
-                name: candidatesArr[i].name,
-                email: candidatesArr[i].email,
-                votes: candidatesArr[i].votes,
-                voters: candidatesArr[i].voters
-            });
-        }
+        ///////////////////////////////////////////////////////////////////
+        app.emit("Updated");
+        //////////////////////////////////////////////////////////////////
+        // let candidates = [];
+        // for (let i = 0; i < candidatesArr.length; i++) {
+        //     candidates.push({
+        //         name: candidatesArr[i].name,
+        //         email: candidatesArr[i].email,
+        //         votes: candidatesArr[i].votes,
+        //         voters: candidatesArr[i].voters
+        //     });
+        // }
+        let newToken = jwt.sign(newPayload, "secret");
         res.json({
             result: "success",
-            candidates: candidates
+            token: newToken
+            // candidates: candidates
         });
         console.log(candidateData, "is successfully registered.");
     }
@@ -225,6 +260,8 @@ app.post("/unregister", async (req, res) => {
     const token = req.body.token;
 
     const payload = jwt.verify(token, "secret");
+    let newPayload = payload;
+    newPayload.isCandidate = false;
     let client = null;
     let dbo = null;
     let collection = null;
@@ -233,20 +270,25 @@ app.post("/unregister", async (req, res) => {
         dbo = client.db("Voting-System");
         collection = dbo.collection("Candidates");
         await collection.deleteOne({ email: payload.email });
-        let candidatesArr = await collection.find().toArray();
+        // let candidatesArr = await collection.find().toArray();
         await client.close();
-        let candidates = [];
-        for (let i = 0; i < candidatesArr.length; i++) {
-            candidates.push({
-                name: candidatesArr[i].name,
-                email: candidatesArr[i].email,
-                votes: candidatesArr[i].votes,
-                voters: candidatesArr[i].voters
-            });
-        }
+        //////////////////////////////////////////////////////////////////
+        app.emit("Updated");
+        /////////////////////////////////////////////////////////////////
+        // let candidates = [];
+        // for (let i = 0; i < candidatesArr.length; i++) {
+        //     candidates.push({
+        //         name: candidatesArr[i].name,
+        //         email: candidatesArr[i].email,
+        //         votes: candidatesArr[i].votes,
+        //         voters: candidatesArr[i].voters
+        //     });
+        // }
+        let newToken = jwt.sign(newPayload, "secret");
         return res.json({
             result: "success",
-            candidates: candidates
+            token: newToken
+            // candidates: candidates
         });
     }
     catch (err) {
@@ -256,6 +298,15 @@ app.post("/unregister", async (req, res) => {
             result: "failure"
         });
     }
+});
+
+app.post("/is-candidate", async (req, res) => {
+    const token = req.body.token;
+    const payload = jwt.verify(token, "secret");
+    console.log("********************************Is a candidate:", payload.isCandidate);
+    res.json({
+        isCandidate: payload.isCandidate
+    });
 });
 
 console.log("Server is listening on port 8080");
