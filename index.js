@@ -104,6 +104,9 @@ app.post("/sign-up", async (req, res) => {
         else {
             await collection.insertOne(data);
             const token = jwt.sign(data, 'secret');
+            ///////////////////////////////////////////////////////
+            em.emit("Updated");
+            ///////////////////////////////////////////////////////
             res.json({
                 login: true,
                 token: token,
@@ -142,6 +145,9 @@ app.post("/log-in", async (req, res) => {
             if (match) {
                 const token = jwt.sign(user, 'secret');
                 await client.close();
+                ///////////////////////////////////////////////////////
+                em.emit("Updated");
+                ///////////////////////////////////////////////////////
                 res.json({
                     login: true,
                     token: token,
@@ -369,32 +375,33 @@ app.post("/is-candidate", async (req, res) => {
     console.log("********************************Is a candidate:", payload.isCandidate);
     
     
-    let client = null;
-    let dbo = null;
-    let collection = null;
-    try {
-        client = await MongoClient.connect(url);
-        dbo = client.db("Voting-System");
-        collection = dbo.collection("Candidates");
-        let candidatesArr = await collection.find().toArray();
-        await client.close();
-        let candidates = [];
-        for (let i = 0; i < candidatesArr.length; i++) {
-            candidates.push({
-                name: candidatesArr[i].name,
-                email: candidatesArr[i].email,
-                votes: candidatesArr[i].votes,
-                voters: candidatesArr[i].voters,
-            });
-        }
+    // let client = null;
+    // let dbo = null;
+    // let collection = null;
+    // try {
+        // client = await MongoClient.connect(url);
+        // dbo = client.db("Voting-System");
+        // collection = dbo.collection("Candidates");
+        // let candidatesArr = await collection.find().toArray();
+        // await client.close();
+        // let candidates = [];
+        // for (let i = 0; i < candidatesArr.length; i++) {
+        //     candidates.push({
+        //         name: candidatesArr[i].name,
+        //         email: candidatesArr[i].email,
+        //         votes: candidatesArr[i].votes,
+        //         voters: candidatesArr[i].voters,
+        //     });
+        // }
+        em.emit("Updated");
         res.json({
             isCandidate: payload.isCandidate,
-            candidates: candidates
+            // candidates: candidates
         });
-    }
-    catch (err) {
-        console.error(err);
-    }
+    // }
+    // catch (err) {
+    //     console.error(err);
+    // }
 });
 
 console.log("Server is listening on port 8080");
