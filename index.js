@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const cors = require('cors');
 const events = require('events');
-const WebSocket = require('ws')
+const WebSocket = require('ws');
 
 const app = express();
 expressWs(app);
@@ -103,11 +103,18 @@ app.post("/sign-up", async (req, res) => {
         }
         else {
             await collection.insertOne(data);
-            const token = jwt.sign(data, 'secret');
+            const tokenData = {
+                name: name,
+                email: email,
+                isCandidate: false
+            };
+            const token = jwt.sign(tokenData, 'secret');
+            ///////////////////////////////////////////////////////
+            em.emit("Updated");
+            ///////////////////////////////////////////////////////
             res.json({
                 login: true,
-                token: token,
-                data: data
+                token: token
             });
             return;
         }
@@ -140,12 +147,19 @@ app.post("/log-in", async (req, res) => {
         if (user) {
             const match = await bcrypt.compare(password, user.password);
             if (match) {
-                const token = jwt.sign(user, 'secret');
+                const tokenData = {
+                    name: user.name,
+                    email: user.email,
+                    isCandidate: user.isCandidate
+                };
+                const token = jwt.sign(tokenData, 'secret');
                 await client.close();
+                ///////////////////////////////////////////////////////
+                em.emit("Updated");
+                ///////////////////////////////////////////////////////
                 res.json({
                     login: true,
-                    token: token,
-                    data: user
+                    token: token
                 });
             }
             else {
@@ -183,13 +197,7 @@ app.post("/vote", async (req, res) => {
     let payload = jwt.verify(token, "secret");
     const candidate = req.body.candidate;
     console.log("Trying to vote for:", candidate);
-    // for (let i = 0; i < payload.candidatesVoted.length; i++) {
-    //     if (payload.candidatesVoted[i].email === candidate.email) {
-    //         return res.status(400).json({
-    //             message: "Already voted"
-    //         });
-    //     }
-    // }
+    
     if (candidate.voters.includes(payload.email)) {
         return res.status(400).json({
             message: "Already voted"
@@ -210,27 +218,17 @@ app.post("/vote", async (req, res) => {
         console.log(doc);
         doc.votes += 1;
         doc.voters.push(payload.email);
-        // await collection.deleteOne(candidate);
+        
         await collection.deleteOne({ email: candidate.email });
         await collection.insertOne(doc);
-        // let candidatesArr = await collection.find().toArray();
+        
         await client.close();
         ////////////////////////////////////////////////////////////////////
         em.emit("Updated");
         ////////////////////////////////////////////////////////////////////
-        // let candidates = [];
-        // for (let i = 0; i < candidatesArr.length; i++) {
-        //     candidates.push({
-        //         name: candidatesArr[i].name,
-        //         email: candidatesArr[i].email,
-        //         votes: candidatesArr[i].votes,
-        //         voters: candidatesArr[i].voters,
-        //     });
-        // }
 
         res.json({
-            token: newToken,
-            // candidates: candidates
+            token: newToken
         });
     }
     catch (err) {
@@ -269,7 +267,7 @@ app.post("/register", async (req, res) => {
         let dup = await collection.findOne({ email: candidateData.email });
         if (!dup)
             await collection.insertOne(candidateData);
-        // let candidatesArr = await collection.find().toArray();
+        
         collection = dbo.collection("Users");
         let candidateAcc = await collection.findOne({ email: candidateData.email });
         candidateAcc.isCandidate = true;
@@ -279,20 +277,11 @@ app.post("/register", async (req, res) => {
         ///////////////////////////////////////////////////////////////////
         em.emit("Updated");
         //////////////////////////////////////////////////////////////////
-        // let candidates = [];
-        // for (let i = 0; i < candidatesArr.length; i++) {
-        //     candidates.push({
-        //         name: candidatesArr[i].name,
-        //         email: candidatesArr[i].email,
-        //         votes: candidatesArr[i].votes,
-        //         voters: candidatesArr[i].voters
-        //     });
-        // }
+
         let newToken = jwt.sign(newPayload, "secret");
         res.json({
             result: "success",
             token: newToken
-            // candidates: candidates
         });
         console.log(candidateData, "is successfully registered.");
     }
@@ -328,25 +317,16 @@ app.post("/unregister", async (req, res) => {
         doc.isCandidate = false;
         await collection.deleteOne({ email: payload.email });
         await collection.insertOne(doc);
-        // let candidatesArr = await collection.find().toArray();
+        
         await client.close();
         //////////////////////////////////////////////////////////////////
         em.emit("Updated");
         /////////////////////////////////////////////////////////////////
-        // let candidates = [];
-        // for (let i = 0; i < candidatesArr.length; i++) {
-        //     candidates.push({
-        //         name: candidatesArr[i].name,
-        //         email: candidatesArr[i].email,
-        //         votes: candidatesArr[i].votes,
-        //         voters: candidatesArr[i].voters
-        //     });
-        // }
+        
         let newToken = jwt.sign(newPayload, "secret");
         return res.json({
             result: "success",
             token: newToken
-            // candidates: candidates
         });
     }
     catch (err) {
@@ -367,34 +347,12 @@ app.post("/is-candidate", async (req, res) => {
     }
     const payload = jwt.verify(token, "secret");
     console.log("********************************Is a candidate:", payload.isCandidate);
-    
-    
-    let client = null;
-    let dbo = null;
-    let collection = null;
-    try {
-        client = await MongoClient.connect(url);
-        dbo = client.db("Voting-System");
-        collection = dbo.collection("Candidates");
-        let candidatesArr = await collection.find().toArray();
-        await client.close();
-        let candidates = [];
-        for (let i = 0; i < candidatesArr.length; i++) {
-            candidates.push({
-                name: candidatesArr[i].name,
-                email: candidatesArr[i].email,
-                votes: candidatesArr[i].votes,
-                voters: candidatesArr[i].voters,
-            });
-        }
-        res.json({
-            isCandidate: payload.isCandidate,
-            candidates: candidates
-        });
-    }
-    catch (err) {
-        console.error(err);
-    }
+    //////////////////////////////////////////////////////////////
+    em.emit("Updated");
+    //////////////////////////////////////////////////////////////
+    res.json({
+        isCandidate: payload.isCandidate
+    });
 });
 
 console.log("Server is listening on port 8080");
