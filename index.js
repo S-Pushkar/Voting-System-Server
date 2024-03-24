@@ -64,6 +64,7 @@ app.ws("/ws", async (ws, req) => {
             }
             console.log(candidates);
             // Broadcast the candidates to all connected clients
+            console.log("Broadcasting candidates to all clients:", candidates);
             socketClients.forEach((cli) => {
                 if (cli.readyState == WebSocket.OPEN) {
                     cli.send(JSON.stringify(candidates));
